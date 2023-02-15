@@ -1,5 +1,5 @@
-import _ from 'lodash'
 import * as vscode from 'vscode'
+import _ from 'lodash'
 import { registerExtensionCommand } from 'vscode-framework'
 
 const SCHEME = 'multiRename'
@@ -25,7 +25,7 @@ export const activate = () => {
             return []
         },
         readFile() {
-            const text = !currentRenameSession ? '' : currentRenameSession.locations.map(loc => (loc ? loc.placeholder : '')).join('\n')
+            const text = currentRenameSession ? currentRenameSession.locations.map(loc => (loc ? loc.placeholder : '')).join('\n') : ''
             return new TextEncoder().encode(text)
         },
         rename() {},
@@ -43,6 +43,7 @@ export const activate = () => {
         version++
         emitter.fire([{ type: vscode.FileChangeType.Changed, uri: RENAME_URI }])
     }
+
     function showMultiRenameSession(justFocus = false) {
         return vscode.window.showTextDocument(RENAME_URI, justFocus ? {} : { preview: false, viewColumn: vscode.ViewColumn.Beside })
     }
@@ -67,19 +68,22 @@ export const activate = () => {
                 },
             )
             if (choice?.title === 'Focus') {
-                showMultiRenameSession(true)
+                void showMultiRenameSession(true)
                 return
             }
+
             if (choice?.title !== 'Close previous and continue') {
                 return
             }
         }
+
         const editor = vscode.window.activeTextEditor
         if (!editor) return
-        const errors: [number, string][] = []
-        const renameLocation: (RenameLocation | undefined)[] = []
+        const errors: Array<[number, string]> = []
+        const renameLocation: Array<RenameLocation | undefined> = []
         for (const [i, selection] of editor.selections.entries()) {
             try {
+                // eslint-disable-next-line no-await-in-loop
                 const { placeholder, range } = await vscode.commands.executeCommand<{ placeholder: string; range }>(
                     'vscode.prepareRename',
                     editor.document.uri,
@@ -91,14 +95,15 @@ export const activate = () => {
                 renameLocation.push(undefined)
             }
         }
-        if (errors.length) {
+
+        if (errors.length > 0) {
             const choice = await vscode.window.showErrorMessage(
                 'Rename errors in following positions:',
                 {
                     modal: true,
                     detail: errors
                         .map(([i, err]) => {
-                            const { line, character } = editor!.selections[i]!.active
+                            const { line, character } = editor.selections[i]!.active
                             return `${line + 1}:${character + 1}: ${err}`
                         })
                         .join('\n'),
@@ -115,6 +120,7 @@ export const activate = () => {
                 return
             }
         }
+
         const selectionRangesMapped = editor.selections
             .map((selection, i) => {
                 const renameLoc = renameLocation[i]
@@ -122,15 +128,17 @@ export const activate = () => {
                 let start: vscode.Position
                 try {
                     start = new vscode.Position(selection.start.line - renameLoc.range.start.line, selection.start.character - renameLoc.range.start.character)
-                } catch (err) {
+                } catch {
                     start = new vscode.Position(i, 0)
                 }
+
                 let end: vscode.Position
                 try {
                     end = new vscode.Position(selection.end.line - renameLoc.range.end.line, selection.end.character - renameLoc.range.end.character)
-                } catch (err) {
+                } catch {
                     end = new vscode.Position(i, 0)
                 }
+
                 return new vscode.Selection(start, end)
             })
             .filter(Boolean)
@@ -150,17 +158,17 @@ export const activate = () => {
         }
     })
 
-    let selections: vscode.Selection[] = []
+    const selections: vscode.Selection[] = []
     vscode.window.onDidChangeTextEditorSelection(({ textEditor, selections }) => {
         if (textEditor.document.uri.scheme !== SCHEME) return
         if (selections.length !== 1) return
         const targetEditor = vscode.window.visibleTextEditors.find(editor => editor.document === currentRenameSession?.document)
-        if (!targetEditor) return
+        // if (!targetEditor) return
     })
 
     registerExtensionCommand('processRename', async () => {
         if (!currentRenameSession) {
-            vscode.window.showWarningMessage('There is no rename session in progress.')
+            void vscode.window.showWarningMessage('There is no rename session in progress.')
             return
         }
 
@@ -175,6 +183,7 @@ export const activate = () => {
         for (const [i, line] of lines.entries()) {
             const renameLoc = currentRenameSession.locations[i]
             if (!renameLoc) continue
+            // eslint-disable-next-line no-await-in-loop
             const edit = await vscode.commands.executeCommand<vscode.WorkspaceEdit>(
                 'vscode.executeDocumentRenameProvider',
                 currentRenameSession.document.uri,
@@ -186,6 +195,7 @@ export const activate = () => {
                 globalEdit.set(uri, edits)
             }
         }
+
         await vscode.workspace.applyEdit(globalEdit)
         await showMultiRenameSession(true)
         await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor')
@@ -201,5 +211,6 @@ function findRenamingEditorTab() {
             }
         }
     }
-    return
+
+    return undefined
 }

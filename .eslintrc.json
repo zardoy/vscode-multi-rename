@@ -1,0 +1,6 @@
+{
+    "extends": "zardoy",
+    "rules": {
+        "import/no-extraneous-dependencies": "off"
+    }
+}
