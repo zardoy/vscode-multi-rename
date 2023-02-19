@@ -1,6 +1,7 @@
 {
     "name": "multi-rename",
     "displayName": "Multi Rename",
+    "description": "Batch rename symbols within text editor using another text editor!",
     "publisher": "zardoy",
     "version": "0.0.0-dev",
     "license": "MIT",
